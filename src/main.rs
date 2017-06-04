@@ -1,12 +1,23 @@
 mod neural_network;
 
+extern crate nalgebra;
+extern crate rand;
+
+use self::nalgebra::core::{DMatrix, DVector};
+use self::rand::{thread_rng, Rng};
 use neural_network::{NeuralNetwork};
 
 fn main() {
-    let neural_network = NeuralNetwork::new(20, 10);
+
+    let mut rng = thread_rng();
+    let generate = |x: usize, y: usize| rng.next_f64() * 2.0 - 1.0;
+    
+    let input = DVector::from_fn(20, generate);
+
+    let neural_network = NeuralNetwork::new(input.len(), 10, 1);
     println!("Lel c:");
 
-    let input = (0..20).into_iter().map(|x| x as f64).collect::<Vec<f64>>();
+
     println!("\n input \n \t{:?}", input);
     println!("\n\n output: \n \t{:?}", neural_network.feedforward(input));
 }

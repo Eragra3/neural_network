@@ -21,11 +21,11 @@ struct Layer {
 }
 
 pub trait IsLayer {
-  fn feedforward(&self, Vec<f64>) -> Vec<f64>;
+  fn feedforward(&self, DVector<f64>) -> DVector<f64>;
 }
 
 impl IsLayer for InputLayer {
-  fn feedforward(&self, input: Vec<f64>) -> Vec<f64> {
+  fn feedforward(&self, input: DVector<f64>) -> DVector<f64> {
     input
   }
 }
@@ -38,8 +38,9 @@ impl InputLayer {
 }
 
 impl IsLayer for Layer {
-  fn feedforward(&self, input: Vec<f64>) -> Vec<f64> {
-    input
+  fn feedforward(&self, input: DVector<f64>) -> DVector<f64> {
+    let result = &self.weights * input + &self.biases;
+    result
   }
 }
 
@@ -54,19 +55,23 @@ impl Layer {
 }
 
 impl NeuralNetwork {
-  pub fn new(input_size: usize, output_size: usize) -> NeuralNetwork {
+  pub fn new(input_size: usize, output_size: usize, layers_sizes: Vec<usize>) -> NeuralNetwork {
     let mut neural_network = NeuralNetwork { 
-      layers: vec![]
+      layers: vec![layers_count]
     };
 
     let input_layer = InputLayer::new(input_size, input_size);
     neural_network.layers.push(Box::new(input_layer));
-    let hidden_layer_1 = Layer::new(input_size, output_size);
-    neural_network.layers.push(Box::new(hidden_layer_1));
+
+    for layer_size in layers_sizes {
+      let hidden_layer_1 = Layer::new(input_size, output_size);
+      neural_network.layers.push(Box::new(hidden_layer_1));
+    }
+
     neural_network
   }
     
-  pub fn feedforward(&self, input: Vec<f64>) -> Vec<f64> {
+  pub fn feedforward(&self, input: DVector<f64>) -> DVector<f64> {
     self.layers.iter().fold(input, |prev_output, layer| layer.feedforward(prev_output))
   }
 }
