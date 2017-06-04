@@ -3,18 +3,18 @@ mod neural_network;
 extern crate nalgebra;
 extern crate rand;
 
-use self::nalgebra::core::{DMatrix, DVector};
+use self::nalgebra::core::{DVector};
 use self::rand::{thread_rng, Rng};
-use neural_network::{NeuralNetwork};
+use neural_network::NeuralNetwork;
 
 fn main() {
 
     let mut rng = thread_rng();
-    let generate = |x: usize, y: usize| rng.next_f64() * 2.0 - 1.0;
-    
+    let generate = |_: usize, _: usize| rng.next_f64() * 2.0 - 1.0;
+
     let input = DVector::from_fn(20, generate);
 
-    let neural_network = NeuralNetwork::new(input.len(), 10, 1);
+    let neural_network = NeuralNetwork::new(vec![input.len(), 50, 10]);
     println!("Lel c:");
 
 
