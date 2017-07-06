@@ -3,6 +3,14 @@ extern crate rand;
 
 use self::nalgebra::core::{DMatrix, DVector};
 use self::rand::{thread_rng, Rng};
+use super::math_utils::*;
+
+use std::marker::Copy;
+use std::cmp::PartialEq;
+use std::fmt::Debug;
+
+pub trait MatrixElement : 'static + Copy + PartialEq + Debug {}
+impl<T> MatrixElement for T where T : 'static + Copy + PartialEq + Debug {}
 
 #[derive(Debug)]
 pub struct InputLayer {
@@ -10,9 +18,9 @@ pub struct InputLayer {
 }
 
 #[derive(Debug)]
-pub struct HiddenLayer {
-    pub weights: DMatrix<f64>,
-    pub biases: DVector<f64>,
+pub struct HiddenLayer<T: MatrixElement> {
+    pub weights: DMatrix<T>,
+    pub biases: DVector<T>,
 }
 
 #[derive(Debug)]
@@ -20,20 +28,24 @@ pub struct OutputLayer {
 
 }
 
-pub trait CanFeedforward {
-    fn feedforward(&self, DVector<f64>) -> DVector<f64>;
+pub trait CanFeedforward<T: MatrixElement> {
+    fn feedforward(&self, DVector<T>) -> DVector<T>;
 }
 
-pub trait CanBackpropagate {
-    fn backpropagate(&self, DVector<f64>) -> DVector<f64>;
+pub trait CanActivate<T: MatrixElement> {
+    fn activate(&self, DVector<T>) -> DVector<T>;
+}
+
+pub trait CanBackpropagate<T: MatrixElement> {
+    fn backpropagate(&self, DVector<T>) -> DVector<T>;
 }
 
 /// T is result type
-pub trait CanComputeSolution<T> {
-    fn compute(&self, input: DVector<f64>) -> T;
+pub trait CanComputeSolution<T: MatrixElement, S> {
+    fn compute(&self, input: DVector<T>) -> S;
 }
 
-impl CanFeedforward for InputLayer {
+impl CanFeedforward<f64> for InputLayer {
     fn feedforward(&self, input: DVector<f64>) -> DVector<f64> {
         input
     }
@@ -45,22 +57,27 @@ impl InputLayer {
         let layer = InputLayer {};
         layer
     }
+
+    // pub fn get_size(&self) -> usize {
+    //     0
+    // }
 }
 
-impl CanFeedforward for HiddenLayer {
+impl CanFeedforward<f64> for HiddenLayer<f64> {
     fn feedforward(&self, input: DVector<f64>) -> DVector<f64> {
-
-        // println!("input size: \t\t\t{}", input.len());
-        // println!("weights size (rows, columns): \t{:?}", self.weights.shape());
-        // println!("biases size: \t\t\t{}", self.biases.len());
-
         let result = &self.weights * input + &self.biases;
-        result
+        self.activate(result)
     }
 }
 
-impl HiddenLayer {
-    pub fn new(input_size: usize, neuron_count: usize) -> HiddenLayer {
+impl CanActivate<f64> for HiddenLayer<f64> {
+    fn activate(&self, input: DVector<f64>) -> DVector<f64> {
+        input.map(|v| sigmoid(v))
+    }
+}
+
+impl HiddenLayer<f64> {
+    pub fn new(input_size: usize, neuron_count: usize) -> HiddenLayer<f64> {
         let mut rng = thread_rng();
         let generate = |_: usize, _: usize| rng.next_f64() * 2.0 - 1.0;
         let weights = DMatrix::from_fn(neuron_count, input_size, generate);
@@ -70,9 +87,13 @@ impl HiddenLayer {
             biases: biases,
         }
     }
+
+    pub fn get_size(&self) -> (usize, usize) {
+        (self.weights.nrows(), self.weights.ncols())
+    }
 }
 
-impl CanComputeSolution<usize> for OutputLayer {
+impl CanComputeSolution<f64, usize> for OutputLayer {
     fn compute(&self, input: DVector<f64>) -> usize {
         let mut max_index = 0;
         let mut max_x = input[0];

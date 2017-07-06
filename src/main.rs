@@ -4,8 +4,6 @@ mod mnist_reader;
 extern crate nalgebra;
 extern crate rand;
 
-use self::nalgebra::core::{DVector};
-use self::rand::{thread_rng, Rng};
 use neural_network::NeuralNetwork;
 
 fn main() {
@@ -19,15 +17,10 @@ fn main() {
     }
 
     println!("Generating neural network");
-    let mut rng = thread_rng();
-    let generate = |_: usize, _: usize| rng.next_f64() * 2.0 - 1.0;
+    let neural_network = NeuralNetwork::new(vec![784, 50, 10]);
+    neural_network.dump();
 
-    let input = DVector::from_fn(20, generate);
-    
-    let neural_network = NeuralNetwork::new(vec![input.len(), 50, 10]);
-    println!("Lel c:");
-
-
-    println!("\n input \n \t{:?}", input);
-    println!("\n\n output: \n \t{:?}", neural_network.feedforward(input));
+    println!("Testing against MNIST test set");
+    let correct_solutions = neural_network.get_correct_solutions(&training_dataset);
+    println!("Correct colutions : {}/{}", correct_solutions, training_dataset.capacity());
 }

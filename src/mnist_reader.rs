@@ -4,23 +4,20 @@ extern crate pbr;
 extern crate typenum;
 
 use self::pbr::ProgressBar;
+use std::time::Duration;
 use std::io::Cursor;
-use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
-use self::nalgebra::core::{Matrix, MatrixArray, VectorN};
-use self::typenum::U784;
+use self::nalgebra::core::{DVector};
 use self::byteorder::{BigEndian, ReadBytesExt};
-use std::time::Duration;
 
 pub fn read(image_file_name: &str, label_file_name: &str) -> Result<Vec<MnistImage>, String> {
-    let file = File::open(image_file_name);
+    let image_file = File::open(image_file_name);
+    let mut images: Vec<MnistImage>;
 
-    let images: Vec<MnistImage>;
-
-    match file {
-        Ok(file) => {
-            match read_image_file(file) {
+    match image_file {
+        Ok(image_file) => {
+            match read_image_file(image_file) {
                 Ok(result) => images = result,
                 Err(msg) => {
                     return Err(format!(
@@ -33,12 +30,28 @@ pub fn read(image_file_name: &str, label_file_name: &str) -> Result<Vec<MnistIma
         }
         _ => return Err(format!("No such file '{}'!", image_file_name)),
     }
+    
+    let label_file = File::open(label_file_name);
+    match label_file {
+        Ok(label_file) => {
+            match read_label_file(label_file, &mut images) {
+                Ok(_) => {},
+                Err(msg) => {
+                    return Err(format!(
+                        "Couldn't read labels from file '{}'! Error - {}",
+                        label_file_name,
+                        msg
+                    ))
+                }
+            }
+        }
+        _ => return Err(format!("No such file '{}'!", label_file_name)),
+    }
 
     Ok(images)
 }
 
-fn read_image_file(mut file: File) -> Result<Vec<MnistImage>, String> {
-
+fn read_image_file(file: File) -> Result<Vec<MnistImage>, String> {
     match read_u32(&file) {
         Ok(magic_number) => {
             if magic_number == 2049 {
@@ -84,60 +97,72 @@ fn read_image_file(mut file: File) -> Result<Vec<MnistImage>, String> {
         _ => return Err(format!("Cannot read columns count!")),
     }
 
+    println!("Reading images");
     let mut pb = ProgressBar::new(images.capacity() as u64);
     pb.set_max_refresh_rate(Some(Duration::from_millis(250)));
-    for i in 0..images.capacity() {
-        let mut vector = MnistVector::from_element(0);
+    for _ in 0..images.capacity() {
+        let mut vector = MnistVector::from_element(28*28, 0.);
         pb.inc();
         match read_28x28_image(&file) {
             Ok(data) => {
                 for i in 0..28*28 {
-                    vector[i] = data[i];
+                    vector[i] = f64::from(data[i]);
                 }
             }
-            Err(msg) => {}
+            Err(_) => {}
         }
-        // match read_28x28_image(&file) {
-        //     Ok(data) => {
-        //         for y in 0..28 {
-        //             for x in 0..28 {
-        //                 matrix[(x, y)] = data[x + y * 28];
-        //             }
-        //         }
-        //     }
-        //     Err(msg) => Err(format!("Can't read {}. image! Error - {}", i, msg)),
-        // }
         let image = MnistImage::new(vector, 0);
         images.push(image);
     }
-    pb.finish();
-
-    println!("Diagnostic print, 100, 2001 and 50000 images:");
-    images[100].draw();
-    images[2001].draw();
-    images[50000].draw();
+    pb.finish_println("");
 
     Ok(images)
 }
 
-// fn read_label_file(mut file: File) -> Vec<MnistImage> {
+//Adds labels to already read images
+fn read_label_file(file: File, images: &mut Vec<MnistImage>) -> Result<(), String> {
+    match read_u32(&file) {
+        Ok(magic_number) => {
+            if magic_number == 2051 {
+                return Err(format!("File mismatch. This is image file, not label!"));
+            } else if magic_number != 2049 {
+                return Err(format!(
+                    "Magic number is wrong! Expected 2049, got {}",
+                    magic_number
+                ));
+            }
+        }
+        Err(msg) => return Err(format!("Cannot read magic number! Error - {}", msg)),
+    }
+    
+    match read_u32(&file) {
+        Ok(images_count) => if images.len() != images_count as usize {
+            return Err(format!("Labels count does not match images! Labels count - {}, images count - {}", images.len(), images_count));
+        },
+        _ => return Err(format!("Cannot read images count!")),
+    }
 
-//     let mut buffer: &mut [u8] = &mut [];
+    println!("Reading labels");
+    let mut pb = ProgressBar::new(images.capacity() as u64);
+    pb.set_max_refresh_rate(Some(Duration::from_millis(250)));
+    for i in 0..images.capacity() {
+        match read_u8(&file) {
+            Ok(label) => {
+                images[i].label = label as usize;
+            }
+            Err(_) => {}
+        }
+    }
+    pb.finish_println("");
 
-//     match file.read(buffer) {
-//         Ok(magic_number) => {
-//             if magic_number == 2051 {
-//                 return Err("File mismatch. This is image file, not label!");
-//             }
-//             else if magic_number != 2049 {
-//                 return Err("Magic number is wrong!");
-//             }
-//         }
-//         _ => return Err("Cannot read magic number!")
-//     }
+    println!("\nDiagnostic print, 100, 101, 102 and 50000 images:");
+    images[100].draw();
+    images[101].draw();
+    images[102].draw();
+    images[50000].draw();
 
-//     unimplemented!();
-// }
+    Ok(())
+}
 
 /// It might need to be i32
 fn read_u32(mut file: &File) -> Result<u32, String> {
@@ -148,7 +173,7 @@ fn read_u32(mut file: &File) -> Result<u32, String> {
             let mut cursor = Cursor::new(&buffer);
             Ok(cursor.read_u32::<BigEndian>().unwrap())
         }
-        Err(e) => Err(format!("File read error")),
+        Err(e) => Err(format!("File read error. Error - {}", e)),
     }
 }
 
@@ -160,7 +185,7 @@ fn read_u8(mut file: &File) -> Result<u8, String> {
             let mut cursor = Cursor::new(&buffer);
             Ok(cursor.read_u8().unwrap())
         }
-        Err(e) => Err(format!("File read error")),
+        Err(e) => Err(format!("File read error. Error - {}", e)),
     }
 }
 
@@ -171,11 +196,11 @@ fn read_28x28_image(mut file: &File) -> Result<[u8; 28 * 28], String> {
         Ok(()) => {
             Ok(*buffer)
         }
-        Err(e) => Err(format!("File read error")),
+        Err(e) => Err(format!("File read error. Error - {}", e)),
     }
 }
 
-type MnistVector = VectorN<u8, U784>;
+pub type MnistVector = DVector<f64>;
 
 #[derive(Debug)]
 pub struct MnistImage {
@@ -192,15 +217,16 @@ impl MnistImage {
     }
 
     pub fn draw(&self) {
+        println!("Label - {}", self.label);
         for i in 0..28*28 {
             if i % 28 == 0 {
                 println!("");
             }
             match self.data[i] {
-                v if v < 10 => print!(" "),
-                v if v < 64 => print!("░"),
-                v if v < 128 => print!("▒"),
-                v if v < 192 => print!("▓"),
+                v if v < 10. => print!(" "),
+                v if v < 64. => print!("░"),
+                v if v < 128. => print!("▒"),
+                v if v < 192. => print!("▓"),
                 _ => print!("█")
             }   
         }
